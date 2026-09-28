@@ -55,6 +55,7 @@ import {
 } from "./requestContext";
 import {
   vmArtifactUnavailableCopy,
+  vmRecreateRequiredCopy,
   vmDisplayNameCopy,
   vmCreateCleanupPendingCopy,
   vmGuestInstallCopy,
@@ -66,7 +67,7 @@ import {
   vmUnsupportedOperationKey,
 } from "./vmErrorMessages";
 import { DISPLAY_NAME_MAX_LENGTH } from "./displayName";
-import { ProviderArtifactUnavailableError } from "./drivers/types";
+import { ProviderArtifactUnavailableError, ProviderMachineRecreateRequiredError } from "./drivers/types";
 import { isProviderCreateCleanupError } from "./drivers/providerCreateCleanup";
 import { PROVIDER_CREATE_CLEANUP_PENDING_FAILURE_CODE } from "./repository";
 import type { Locale } from "../../i18n/routing";
@@ -757,6 +758,12 @@ export const vmWorkflowErrorResponders = {
     if (providerArtifactUnavailable(error.cause)) {
       return vmArtifactUnavailableResponse(error, context.locale);
     }
+    // A machine whose recorded contract can never attach is the user's
+    // machine state, not an outage: answer the permanent, non-retryable
+    // recreate state so clients stop retrying and offer deletion instead.
+    if (providerMachineRecreateRequired(error.cause)) {
+      return vmRecreateRequiredResponse(error, context.locale);
+    }
     if (isProviderCreateCleanupError(error.cause)) {
       return vmCreateCleanupPendingResponse(context.locale);
     }
@@ -991,6 +998,16 @@ export async function vmWorkflowErrorResponse(
   return respondVmWorkflowError(error, { locale: options.locale ?? "en" }, options.overrides);
 }
 
+/** Match the typed recreate-required failure even when the provider wraps the original cause. */
+function providerMachineRecreateRequired(cause: unknown): boolean {
+  let current = cause;
+  for (let depth = 0; depth < 8 && current; depth += 1) {
+    if (current instanceof ProviderMachineRecreateRequiredError) return true;
+    current = typeof current === "object" ? (current as { cause?: unknown }).cause : undefined;
+  }
+  return false;
+}
+
 /** Match typed artifact failures even when the provider wraps the original cause. */
 function providerArtifactUnavailable(cause: unknown): boolean {
   let current = cause;
@@ -1079,6 +1096,29 @@ async function vmArtifactUnavailableResponse(error: VmProviderOperationError, lo
     displayTitle: copy.title,
     displayMessage: copy.message,
     details: { operation: error.operation, retryable: false },
+  });
+}
+
+/**
+ * The machine can never serve the current attach contract. 409 because the
+ * request conflicts with the machine's recorded state; not retryable, and not
+ * an operator fault, so it neither pages anyone nor invites a client retry loop.
+ */
+async function vmRecreateRequiredResponse(error: VmProviderOperationError, locale: Locale): Promise<Response> {
+  const copy = await vmRecreateRequiredCopy(locale);
+  return vmErrorResponse({
+    error: "vm_recreate_required",
+    status: 409,
+    message: copy.message,
+    reason: copy.reason,
+    action: copy.action,
+    phase: vmPhaseForOperation(error.operation),
+    retryable: false,
+    displayTitle: copy.title,
+    displayMessage: copy.message,
+    severity: "error",
+    diagnostics: { provider: error.provider, recreateReason: "legacy_machine_contract" },
+    details: { operation: error.operation, retryable: false, recreateRequired: true },
   });
 }
 

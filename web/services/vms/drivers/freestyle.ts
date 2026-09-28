@@ -18,6 +18,7 @@ import { freestyleRequestFetch } from "./freestyleRequestTiming";
 import { currentVmRequestContext } from "../requestContext";
 import {
   ProviderError,
+  ProviderMachineRecreateRequiredError,
   type AttachTransport,
   type CmuxRemoteApprovalResult,
   type CmuxRemoteApprovalOptions,
@@ -1365,10 +1366,7 @@ export class FreestyleProvider implements VMProvider {
           // so a row without the contract or its addresses is refused.
           const routeAddresses = freestyleRouteAddressesFromMetadata(options?.providerMetadata);
           if (options?.providerMetadata?.cmuxTuiContract !== "snapshot-v2" || !routeAddresses) {
-            throw new ProviderError(
-              "freestyle",
-              `VM ${vmId} predates the snapshot-v2 machine contract (no recorded contract or private address); recreate the machine`,
-            );
+            throw new ProviderMachineRecreateRequiredError("freestyle", vmId, "legacy_machine_contract");
           }
           span.setAttribute("cmux.vm.cmux_tui_contract", "snapshot-v2");
           const route = freestyleCmuxRemoteRoute(routeAddresses, vmId);

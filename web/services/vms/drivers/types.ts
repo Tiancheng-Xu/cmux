@@ -587,6 +587,19 @@ export class ProviderError extends Error {
   }
 }
 
+/**
+ * The machine's recorded state can never serve the current attach contract
+ * (for example a row created before snapshot-v2). Retrying cannot help; the
+ * user must delete the machine and create a new one. Routes answer the
+ * localized, non-retryable `vm_recreate_required`.
+ */
+export class ProviderMachineRecreateRequiredError extends ProviderError {
+  constructor(provider: ProviderId, vmId: string, public readonly reason: "legacy_machine_contract") {
+    super(provider, `VM ${vmId} predates the snapshot-v2 machine contract (no recorded contract or private address); recreate the machine`);
+    this.name = "ProviderMachineRecreateRequiredError";
+  }
+}
+
 /** An unpublished runtime artifact; diagnostics stay server-side while routes localize the failure. */
 export class ProviderArtifactUnavailableError extends ProviderError {
   constructor(provider: ProviderId, diagnostic: { readonly manifestUrl: string; readonly target: string }) {
