@@ -182,6 +182,7 @@ private struct TerminalThemeGalleryView: View {
 /// color, a cursor block, and its 16 ANSI colors as two swatch rows.
 @MainActor
 private struct TerminalThemeCard: View {
+    @Environment(\.settingsSelectionStyle) private var selectionStyle
     let theme: TerminalThemeGalleryModel.Theme
     let isSelected: Bool
     let usedInLight: Bool
@@ -233,11 +234,11 @@ private struct TerminalThemeCard: View {
             .contentShape(Rectangle())
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isSelected ? SettingsSelectionStyle.selectedFill : Color.clear)
+                    .fill(isSelected ? selectionStyle.selectedFill : Color.clear)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(isSelected ? SettingsSelectionStyle.selectedStroke : Color.clear, lineWidth: 2)
+                    .stroke(isSelected ? selectionStyle.selectedStroke : Color.clear, lineWidth: 2)
             )
         }
         .buttonStyle(.plain)
